@@ -22,7 +22,7 @@ ws2811_led_t dotcolors[] = {
 
 const char* socket_path = "./ledstrip.sock";
 ws2811_led_t user_data[128];
-
+char buf_sock[512];
 int main(int argc, char *argv[]) {
     struct sockaddr_un addr;
     int sockdf, rr;
@@ -56,7 +56,11 @@ int main(int argc, char *argv[]) {
         perror("ERROR socket connect");
         exit(EXIT_FAILURE);
     }
-    rr = write(sockdf, "\xCC\xCC\x03\x00", 4);
+    buf_sock[0] = '\xCC';
+    buf_sock[1] = '\xCC';
+    buf_sock[2] = (char)(user_data_count & 0xFF);
+    buf_sock[3] = (char)((user_data_count >> 8) & 0xFF);
+    rr = write(sockdf, buf_sock, 4);
     if (-1 == rr) {
         perror("ERROR socket write");
         exit(EXIT_FAILURE);

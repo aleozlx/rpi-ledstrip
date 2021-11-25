@@ -106,10 +106,7 @@ static uint8_t running = 1;
 void matrix_render(void)
 {
     int x, y;
-    if(pthread_mutex_lock(&mut) !=0) {
-        // perror("ERROR mutex lock");
-    }
-    // printf("lock m\n");
+    pthread_mutex_lock(&mut);
     for (x = 0; x < width; x++)
     {
         for (y = 0; y < height; y++)
@@ -117,10 +114,7 @@ void matrix_render(void)
             ledstring.channel[0].leds[(y * width) + x] = matrix[y * width + x];
         }
     }
-    if(pthread_mutex_unlock(&mut) != 0) {
-        // perror("ERROR mutex unlock");
-    }
-    // printf("unlock m\n");
+    pthread_mutex_unlock(&mut);
 }
 
 int dotspos[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
@@ -345,12 +339,10 @@ void* task_sock(void *arg) {
             if(pthread_mutex_lock(&mut) != 0) {
                 perror("ERROR mutex lock");
             }
-            printf("lock s\n");
             rr = read(client, matrix, ct * sizeof(ws2811_led_t));
             if(pthread_mutex_unlock(&mut) !=0) {
                 perror("ERROR mutex unlock");
             }
-            printf("unlock s\n");
             if (-1 == rr) {
                 perror("ERROR socket read");
             }
@@ -414,6 +406,9 @@ int main(int argc, char *argv[])
     }
 
     if (clear_on_exit) {
+        for (int j = 0; j < width * height; ++j) {
+            matrix[j] = 0;
+        }
         matrix_render();
         ws2811_render(&ledstring);
     }

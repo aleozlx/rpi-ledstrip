@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-all: test test_client
+all: test ledfill
 
 clean:
 	rm -rf test
@@ -16,6 +16,6 @@ RPI_WS281X_DEP=$(addprefix ../rpi_ws281x/,mailbox.c ws2811.c pwm.c pcm.c dma.c r
 test: main.c $(RPI_WS281X_DEP)
 	$(CC) -std=gnu99 -o $@ -I ../rpi_ws281x -pthread $^ -lm
 
-test_client: test_client.c
+ledfill: test_client.c
 	$(CC) -std=gnu99 -o $@ -I ../rpi_ws281x $^
 
