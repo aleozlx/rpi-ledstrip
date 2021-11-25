@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifndef SOCK_UDP
-    rr = connect(sockdf, (const struct sockaddr *)&addr, sizeof(addr));
+    rr = connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr));
     if (-1 == rr) {
         perror("ERROR socket connect");
         exit(EXIT_FAILURE);
@@ -95,12 +95,12 @@ int main(int argc, char *argv[]) {
     buf_sock[2] = (char)(user_data_count & 0xFF);
     buf_sock[3] = (char)((user_data_count >> 8) & 0xFF);
 #ifndef SOCK_UDP
-    rr = write(sockdf, buf_sock, 4);
+    rr = write(sockfd, buf_sock, 4);
     if (-1 == rr) {
         perror("ERROR socket write");
         exit(EXIT_FAILURE);
     }
-    rr = write(sockdf, user_data, user_data_count * sizeof(ws2811_led_t));
+    rr = write(sockfd, user_data, user_data_count * sizeof(ws2811_led_t));
 #else
     memcpy(buf_sock+4, user_data, user_data_count * sizeof(ws2811_led_t));
     rr = sendto(sockfd, buf_sock, 4 + user_data_count * sizeof(ws2811_led_t),
