@@ -56,3 +56,5 @@ tools/
 
 # Known targets
 test
+test_client
+*.sock

@@ -42,7 +42,9 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <getopt.h>
-
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <pthread.h>
 
 #include "clk.h"
 #include "gpio.h"
@@ -96,27 +98,42 @@ ws2811_t ledstring =
     },
 };
 
+pthread_mutex_t mut;
+ws2811_led_t *matrix;
+
 static uint8_t running = 1;
 
 void matrix_render(void)
 {
     int x, y;
-
+    if(pthread_mutex_lock(&mut) !=0) {
+        // perror("ERROR mutex lock");
+    }
+    // printf("lock m\n");
     for (x = 0; x < width; x++)
     {
         for (y = 0; y < height; y++)
         {
-            ledstring.channel[0].leds[(y * width) + x] = 0x00001020;
+            ledstring.channel[0].leds[(y * width) + x] = matrix[y * width + x];
         }
     }
+    if(pthread_mutex_unlock(&mut) != 0) {
+        // perror("ERROR mutex unlock");
+    }
+    // printf("unlock m\n");
 }
 
 int dotspos[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-
+int sockfd = -1;
 static void ctrl_c_handler(int signum)
 {
 	(void)(signum);
     running = 0;
+    if (sockfd != -1) {
+        shutdown(sockfd, SHUT_RD);
+        close(sockfd);
+        sockfd = -1;
+    }
 }
 
 static void setup_handlers(void)
@@ -178,7 +195,7 @@ void parseargs(int argc, char **argv, ws2811_t *ws2811)
 				"-i (--invert)  - invert pin output (pulse LOW)\n"
 				"-c (--clear)   - clear matrix on exit.\n"
 				, argv[0]);
-			exit(-1);
+			exit(EXIT_FAILURE);
 
 		case 'D':
 			break;
@@ -219,7 +236,7 @@ void parseargs(int argc, char **argv, ws2811_t *ws2811)
 					ws2811->dmanum = dma;
 				} else {
 					printf ("invalid dma %d\n", dma);
-					exit (-1);
+					exit(EXIT_FAILURE);
 				}
 			}
 			break;
@@ -231,7 +248,7 @@ void parseargs(int argc, char **argv, ws2811_t *ws2811)
 					ws2811->channel[0].count = height * width;
 				} else {
 					printf ("invalid height %d\n", height);
-					exit (-1);
+					exit(EXIT_FAILURE);
 				}
 			}
 			break;
@@ -243,7 +260,7 @@ void parseargs(int argc, char **argv, ws2811_t *ws2811)
 					ws2811->channel[0].count = height * width;
 				} else {
 					printf ("invalid width %d\n", width);
-					exit (-1);
+					exit(EXIT_FAILURE);
 				}
 			}
 			break;
@@ -276,27 +293,98 @@ void parseargs(int argc, char **argv, ws2811_t *ws2811)
 				}
 				else {
 					printf ("invalid strip %s\n", optarg);
-					exit (-1);
+					exit(EXIT_FAILURE);
 				}
 			}
 			break;
 
 		case '?':
 			/* getopt_long already reported error? */
-			exit(-1);
+			exit(EXIT_FAILURE);
 
 		default:
-			exit(-1);
+			exit(EXIT_FAILURE);
 		}
 	}
 }
 
+const char* socket_path = "./ledstrip.sock";
+char buf_sock[512];
+void* task_sock(void *arg) {
+    int client, rr;
+    struct sockaddr_un addr;
+    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("ERROR opening socket");
+        exit(EXIT_FAILURE);
+    }
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
+    unlink(socket_path);
+
+    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        perror("ERROR bind error");
+        exit(EXIT_FAILURE);
+    }
+    if (listen(sockfd, 5) == -1) {
+        perror("ERROR listen error");
+        exit(EXIT_FAILURE);
+    }
+    while (running) {
+        if ((client = accept(sockfd, NULL, NULL)) == -1) {
+            perror("ERROR accept error");
+            continue;
+        }
+        rr = read(client, buf_sock, 4);
+        if (-1 == rr) {
+            perror("ERROR socket read");
+        }
+        if (0xCC == buf_sock[0] && buf_sock[0] == buf_sock[1]) {
+            int ct = buf_sock[2] | (buf_sock[3] << 8);
+            if(pthread_mutex_lock(&mut) != 0) {
+                perror("ERROR mutex lock");
+            }
+            printf("lock s\n");
+            rr = read(client, matrix, ct * sizeof(ws2811_led_t));
+            if(pthread_mutex_unlock(&mut) !=0) {
+                perror("ERROR mutex unlock");
+            }
+            printf("unlock s\n");
+            if (-1 == rr) {
+                perror("ERROR socket read");
+            }
+        }
+        else {
+            do {
+                rr = read(client, buf_sock, sizeof(buf_sock));
+            } while (rr != 0 && rr != -1);
+        }
+        close(client);
+    }
+    if (sockfd != -1) {
+        shutdown(sockfd, SHUT_RD);
+        close(sockfd);
+        sockfd = -1;
+    }
+    unlink(socket_path);
+}
 
 int main(int argc, char *argv[])
 {
+    pthread_t t_sock;
     ws2811_return_t ret;
 
     parseargs(argc, argv, &ledstring);
+
+    matrix = malloc(sizeof(ws2811_led_t) * width * height);
+    for (int j = 0; j < width * height; ++j) {
+        matrix[j] = 0x00001020;
+    }
+    if (pthread_mutex_init(&mut, NULL) != 0) {                                    
+        perror("ERROR mutex init");                                                       
+        exit(1);                                                                    
+    }
 
     setup_handlers();
 
@@ -304,6 +392,11 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "ws2811_init failed: %s\n", ws2811_get_return_t_str(ret));
         return ret;
+    }
+
+    if(pthread_create(&t_sock, NULL, &task_sock, NULL)) {
+        perror("ERROR creating a thread");
+        exit(1);
     }
 
     while (running)
@@ -321,12 +414,12 @@ int main(int argc, char *argv[])
     }
 
     if (clear_on_exit) {
-	matrix_render();
-	ws2811_render(&ledstring);
+        matrix_render();
+        ws2811_render(&ledstring);
     }
 
     ws2811_fini(&ledstring);
-
+    pthread_join(t_sock, NULL);
     printf ("\n");
     return ret;
 }
