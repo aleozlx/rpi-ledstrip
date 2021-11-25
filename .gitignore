@@ -50,3 +50,9 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# RPi cross compile tools
+tools/
+
+# Known targets
+test
