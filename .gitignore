@@ -56,4 +56,5 @@ tools/
 
 # Known targets
 bin/
+bin_dev/
 *.sock

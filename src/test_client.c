@@ -11,6 +11,7 @@
 #endif
 
 #include "ws2811.h"
+#include "protocol.h"
 #define ARRAY_SIZE(stuff)  (sizeof(stuff) / sizeof(stuff[0]))
 
 ws2811_led_t dotcolors[] = {
@@ -24,11 +25,7 @@ ws2811_led_t dotcolors[] = {
     0x00200010,
 };
 
-#ifndef SOCK_UDP
-const char* socket_path = "./ledstrip.sock";
-#endif
 ws2811_led_t user_data[128];
-char buf_sock[512];
 int main(int argc, char *argv[]) {
 #ifndef SOCK_UDP
     struct sockaddr_un
