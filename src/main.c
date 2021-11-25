@@ -296,7 +296,7 @@ void parseargs(int argc, char **argv, ws2811_t *ws2811)
 
 
 void* task_sock(void *arg) {
-    int sockfd = protocol_init_socket();
+    int sockfd = protocol_init_consumer_socket();
     while (running) {
         protocol_recv(sockfd, &mut, matrix);
     }

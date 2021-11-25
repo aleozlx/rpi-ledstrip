@@ -56,37 +56,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Require integer arguments. Value range is [0-7].\n");
         exit(EXIT_FAILURE);
     }
-    sockfd = socket(
-#ifndef SOCK_UDP
-        AF_UNIX, SOCK_STREAM,
-#else
-        AF_INET, SOCK_DGRAM,
-#endif
-    0);
-    if (-1 == sockfd) {
-        perror("ERROR opening socket");
-        exit(EXIT_FAILURE);
-    }
-    memset(&addr, 0, sizeof(addr));
-#ifndef SOCK_UDP
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-#else
-    addr.sin_family      = AF_INET;  // IPv4
-    addr.sin_port        = htons(5151);
-    if(1 != inet_pton(AF_INET, argv[1], &addr.sin_addr.s_addr)) {
-        perror("ERROR invalid ip addr");
-        exit(EXIT_FAILURE);
-    }
-#endif
-
-#ifndef SOCK_UDP
-    rr = connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr));
-    if (-1 == rr) {
-        perror("ERROR socket connect");
-        exit(EXIT_FAILURE);
-    }
-#endif
+    sockfd = protocol_init_producer_socket(argv[1], &addr);
     buf_sock[0] = '\xCC';
     buf_sock[1] = '\xCC';
     buf_sock[2] = (char)(user_data_count & 0xFF);

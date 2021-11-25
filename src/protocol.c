@@ -4,7 +4,7 @@
 const char* socket_path = "./ledstrip.sock";
 char buf_sock[512];
 
-int protocol_init_socket() {
+int protocol_init_consumer_socket() {
     int rr;
 #ifndef SOCK_UDP
     struct sockaddr_un
@@ -43,6 +43,54 @@ int protocol_init_socket() {
     if (listen(sockfd, 5) == -1) {
         perror("ERROR listen error");
         exit(EXIT_FAILURE);
+    }
+#endif
+    return sockfd;
+}
+
+int protocol_init_producer_socket(const char *server_addr, void *addr_out) {
+    int rr;
+#ifndef SOCK_UDP
+    struct sockaddr_un
+#else
+    struct sockaddr_in
+#endif
+        addr;
+
+    int sockfd = socket(
+#ifndef SOCK_UDP
+        AF_UNIX, SOCK_STREAM,
+#else
+        AF_INET, SOCK_DGRAM,
+#endif
+    0);
+
+    if (sockfd < 0) {
+        perror("ERROR opening socket");
+        exit(EXIT_FAILURE);
+    }
+    memset(&addr, 0, sizeof(addr));
+#ifndef SOCK_UDP
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
+#else
+    addr.sin_family      = AF_INET;  // IPv4
+    addr.sin_port        = htons(5151);
+    if(1 != inet_pton(AF_INET, server_addr, &addr.sin_addr.s_addr)) {
+        perror("ERROR invalid ip addr");
+        exit(EXIT_FAILURE);
+    }
+#endif
+#ifndef SOCK_UDP
+    rr = connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr));
+    if (-1 == rr) {
+        perror("ERROR socket connect");
+        exit(EXIT_FAILURE);
+    }
+#endif
+#ifdef SOCK_UDP
+    if (NULL != addr_out) {
+        memcpy(addr_out, &addr, sizeof(addr));
     }
 #endif
     return sockfd;
