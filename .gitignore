@@ -57,4 +57,5 @@ tools/
 # Known targets
 test
 ledfill
+ledfill_remote
 *.sock
